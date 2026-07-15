@@ -63,15 +63,13 @@ python verify_artifact.py --artifact ./out 2>&1 | tee verify.log     # 3. 확인
 
 ---
 
-## git 저장소 지도 (헷갈리지 마세요)
+## git 저장소 지도
 
-`/root/works` **자체는 git repo가 아닙니다.** 아래 3곳만 독립된 repo입니다:
-
-| 경로 | 리모트 | 용도 |
-|---|---|---|
-| `furiosa-student-kit/` | github: futurianh1k/furiosa-student-kit | **학생 배포용** (여기에 실습 자료 사본) |
-| `furiosa-repo/furiosa-apps/` | (furiosa 공식) | 참고용 |
-| `warboy/warboy-sdk/` | (furiosa 공식) | 참고용 |
+**`/root/works` 자체가 이제 `furiosa-student-kit` git repo 입니다** (2026-07-15 워크스페이스 재구성).
+- origin: `git@github.com:futurianh1k/furiosa-student-kit.git`, branch `main`.
+- 이 워크스페이스 = 학생 배포용 repo 그 자체. 예전의 별도 참고 repo(furiosa-apps, warboy-sdk)와
+  중첩 사본(`furiosa-student-kit/quickstartsmaples/`)은 이 워크스페이스에 더 이상 없습니다.
+  (과거의 "사본 두 개 동기화" 문제는 이 재구성으로 해소됨.)
 
 ⚠ **빌드 산출물을 커밋하지 마세요.** `*.safetensors`(950MB), `*-artifact/`,
 `binary_bundle.zip` 등은 `.gitignore`에 있습니다. GitHub 100MB 제한에 걸립니다.

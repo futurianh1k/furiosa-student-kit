@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(mkdir -p /root/works/history)",
-      "Bash(rm -f /root/works/docs/handoff/2026-07-15-claude-handoff.md)"
+      "Bash(rm -f /root/works/docs/handoff/2026-07-15-claude-handoff.md)",
+      "WebFetch(domain:developer.furiosa.ai)",
+      "WebFetch(domain:huggingface.co)",
+      "WebFetch(domain:arxiv.org)",
+      "Workflow(deep-research)",
+      "WebSearch",
+      "WebFetch(domain:furiosa.ai)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:forums.furiosa.ai)",
+      "WebFetch(domain:chipsandcheese.com)",
+      "Bash(curl -sSL --max-time 30 \"https://huggingface.co/google/gemma-4-12B-it/raw/main/config.json\")",
+      "Bash(echo \"---EXIT:$?---\")"
     ]
   }
 }
