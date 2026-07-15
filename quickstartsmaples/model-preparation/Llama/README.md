@@ -26,13 +26,15 @@ huggingface_hub.errors.GatedRepoError: 403 Client Error ...
 ## Step 1. dry-run (로그인 후)
 ```bash
 bash ../_kit/scripts/check_resources.sh
-python ../_kit/scripts/build_artifact.py --model meta-llama/Llama-3.1-8B-Instruct --dry-run
+python build_llama.py --dry-run
 ```
+> 이 폴더의 `build_llama.py`는 Llama 전용 독립 실행본입니다(모델 ID가 박혀 있고,
+> 토큰이 안 잡히면 미리 경고). 원본 `_kit/scripts/build_artifact.py`는 안 건드립니다.
 `append_buckets`가 0보다 크면(프리셋 있음) `--fix-append` 없이 진행합니다.
 
 ## Step 2. 빌드
 ```bash
-python ../_kit/scripts/build_artifact.py --model meta-llama/Llama-3.1-8B-Instruct -o ./llama31-8b-artifact
+python build_llama.py -o ./llama31-8b-artifact
 ```
 > ⚠ 8B 모델이라 0.5B보다 파이프라인·가중치가 큽니다. 15코어 pod에서는 시간이
 > 꽤 걸리고 메모리도 더 씁니다. `check_resources.sh`로 RAM 여유를 먼저 보세요.

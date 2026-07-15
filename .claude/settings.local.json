@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /root/works/history)",
+      "Bash(rm -f /root/works/docs/handoff/2026-07-15-claude-handoff.md)"
+    ]
+  }
+}
