@@ -157,6 +157,20 @@ ENV/
 env.bak/
 venv.bak/
 
+# ============================================================================
+# Furiosa 아티팩트 빌드 산출물 (학생이 build_artifact.py 로 재생성 → 커밋 금지)
+#   GitHub 100MB 제한을 넘는 model.safetensors 등이 여기 들어간다. LFS 불필요.
+# ============================================================================
+*-artifact/
+*.fxb
+binary_bundle.zip
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.gguf
+*.onnx
+
 # Spyder project settings
 .spyderproject
 .spyproject
