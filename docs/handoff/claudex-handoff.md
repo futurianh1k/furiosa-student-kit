@@ -9,6 +9,37 @@
 
 ---
 
+## 2026-07-15 — Gemma4 12B on RNGD: ❌ NOT FEASIBLE (검증 완료, Codex 문서와 수렴)
+
+**너(Codex)의 `docs/modeldev/2026-07-15_codex_gemma4_build_plan.md` 결론을 확인·확장했어.**
+독립적으로 같은 결론(아키텍처 미지원 → Qwen3-VL 선회)에 도달했고, 딥리서치(109 에이전트,
+21/25 claim 확인) + 내 로컬 직접 실행으로 근거를 굳혔음.
+
+**핵심 (근본 원인):** `furiosa.models`에 Gemma 구현 클래스가 없음 — 이 pod에서 직접 확인한
+노출 클래스는 Exaone4/Exaone/ExaoneMoe/GptOss/Llama/**Mistral/Phi3**/Qwen2/Qwen3/Qwen3Moe/
+Qwen3VL 뿐. `google/gemma-4-12B`(클래스 `Gemma4UnifiedForConditionalGeneration`)는
+`.build()`에서 `ValueError: unsupported model: ... not available in furiosa.models`로 죽음.
+
+**내가 네 문서에 더한 뉘앙스 4개:**
+1. `--dry-run`은 **거짓 양성**이다 — `get_optimized_cls`가 `.build()`(builder.py:219)에서만
+   돌아서 버킷만 해석하는 dry-run은 통과함. 초판 README의 "dry-run 통과=성공"은 틀림.
+2. 실제 `model_type`은 `gemma`가 아니라 **`gemma4_unified`**, 클래스 `Gemma4UnifiedForConditionalGeneration`.
+3. Gemma **4**는 **Apache-2.0·ungated** (gated는 Gemma 3까지) — 초판의 "gated 벽"은 오류.
+4. 갭 2층위 구분: (a) 프리셋만 없음=버킷으로 해결(Mistral/Phi3/GptOss/Qwen3-VL, 구현은 있음)
+   vs (b) 구현 자체 없음=불가(Gemma). Gemma는 (b).
+
+**내가 바꾼 파일 (검증 완료):**
+- `Gemma4_try/build_gemma_TEMPLATE.py` → "벽 진단판"으로 재작성. 버킷 4종은 설계 예시로
+  채우고, 빌드 전에 `assert_furiosa_supports()`로 아키텍처 지원을 검사해 fail-fast.
+  검증: dry-run 통과(거짓 양성 경고 출력) / 실제 실행 fail-fast(벽 설명 + exit 1).
+- `Gemma4_try/README.md` → 두 전제 오류(gated, 무프리셋) 교정, 대체모델 안내 추가.
+
+**이어받을 것 (제안):** 네가 고른 `Qwen/Qwen3-VL-8B-Instruct` 경로를 **실습⑤(진짜로 빌드되는
+무프리셋 버킷설계 실습)**으로 만들면 좋겠음. Qwen3-VL/Mistral/Phi3/GptOss 중 15코어·64MB shm
+환경에서 실제로 빌드되는지 test-build한 사람은 아직 없음(둘 다 미수행).
+
+---
+
 ## 2026-07-15 — 모델별 빌드 스크립트 분리 + 협업 파일 규칙 수립
 
 ### 결정 (사용자 지시)

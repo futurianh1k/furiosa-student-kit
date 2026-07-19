@@ -1,38 +1,40 @@
-"""실습 ④ (심화·도전): Gemma 아티팩트 빌드 — 스캐폴드(정답 없음)
+"""실습 ④ (심화·도전): Gemma 4 12B 아티팩트 빌드 — "벽 진단판"
 
-이 파일은 **완성본이 아니라 뼈대**입니다. 파일명에 TEMPLATE 이 붙은 이유이고,
-폴더 이름이 Gemma4_try("try")인 이유입니다. 아래 TODO 를 여러분이 직접 채워야
-빌드가 됩니다. (원본 _kit/scripts/build_artifact.py 는 건드리지 마세요.)
+★ 검증 결론 (2026-07-15, 딥리서치 + Codex + 로컬 직접 실행 3중 확인):
+  이 실습은 "버킷을 못 채워서" 막히는 게 아니라, **Furiosa가 Gemma 아키텍처를
+  아예 구현하지 않아서** 막힌다. 즉 BucketConfig(버킷)로는 절대 해결 불가.
+  이 파일은 그 벽을 코드로 '직접 확인'하도록 만든 진단판이다.
+  (Gemma4_try = 도전. "안 될 수도 있다"가 정상 — 어디서 왜 막히는지 기록이 목표.)
 
-두 개의 벽
-----------
-  벽 1: gated 다운로드      → 실습 ③ Llama 처럼 HF 토큰 로그인이 먼저 필요하다.
-  벽 2: **프리셋이 없다**    → presets.py 에 gemma 가 없어서, 버킷을 비워두면
-                              "No bucket configuration ... no matching bucket preset
-                              for model_type=gemma" 로 실패한다. 4종 버킷을 전부
-                              직접 정의해야 한다(부분 지정 금지).
+원래 템플릿의 잘못된 전제 2가지 (교정)
+--------------------------------------
+  · 오류 1 "Gemma는 gated"      → Gemma **4** 는 Apache-2.0·**ungated** (HF 토큰 불필요).
+                                   gated는 Gemma 3 까지. (아래 MODEL_ID 주석 참고)
+  · 오류 2 "프리셋만 없다 →      → 아니다. furiosa.models 에 Gemma 구현 클래스가 없어
+     버킷 4종 채우면 빌드된다"      버킷을 완벽히 채워도 .build() 가 이렇게 실패한다:
+       ValueError: unsupported model: the class
+       'Gemma4UnifiedForConditionalGeneration' not available in furiosa.models
+     (실제 model_type 은 'gemma' 가 아니라 'gemma4_unified')
 
-무엇을 참고하나
---------------
-  - 버킷 4종의 의미/형식: ../_kit/01_GUIDE.md
-  - 값 잡는 감각: 실습 ①의 _kit/scripts/build_artifact.py 안 QWEN25_05B_* 상수,
-    그리고 furiosa 의 presets.py 안 LLAMA_3_1_8B_PRESET 을 Gemma 크기에 맞게 조정
-  - 규칙: append_buckets 는 (batch, attention_size, input_ids_size) 이고
-          attention_size > input_ids_size 여야 한다.
+★ 함정: get_optimized_cls 는 .build() 시점(builder.py:219)에만 돈다.
+  → `--dry-run`(버킷만 해석)은 **통과**한다. dry-run 통과는 거짓 양성!
+    진짜 벽은 실제 빌드에서만 드러난다. 그래서 이 파일은 빌드 전에 아키텍처
+    지원을 스스로 검사해(fail-fast) 긴 컴파일 낭비 없이 벽을 보여준다.
 
-절차
-----
-  bash ../_kit/scripts/check_resources.sh
-  huggingface-cli login                          # gated → 토큰 로그인
-  python build_gemma_TEMPLATE.py --dry-run       # "no matching preset" 없이 버킷이 해석되면 성공
-  python build_gemma_TEMPLATE.py -o ./gemma-artifact
-  python ../_kit/scripts/verify_artifact.py --artifact ./gemma-artifact | tee verify.log
+두 갭의 구분 (핵심 교훈)
+  (a) 프리셋만 없음  → BucketConfig 로 해결 가능. 대상: Mistral / Phi3 / GptOss / Qwen3-VL
+                       (이들은 furiosa.models 에 '구현은 있고' 프리셋만 없다)
+  (b) 구현 자체 없음 → 어떤 버킷으로도 해결 불가. 대상: **Gemma (여기 해당)**
 
-성공/실패 기준
--------------
-  - dry-run 에서 append_buckets 가 0보다 크고 에러가 없으면 설계 성공.
-  - 빌드가 0/N 에서 멈추면 → 버킷 값이 아니라 자원 문제(워커 CPU ≤ 실효 CPU).
-  - 이 실습은 "안 될 수도 있다"가 정상. 어디서 왜 막히는지 기록하는 게 목표.
+★ '진짜 버킷 설계' 실습을 하고 싶다면 → (a) 부류로 바꿔라: Mistral / Phi3 / GptOss /
+  Qwen3-VL. 그건 버킷을 직접 설계해야 하고 '실제로 빌드된다'.
+  (Codex 는 같은 이유로 Qwen3-VL-8B 로 선회함: docs/modeldev/2026-07-15_codex_gemma4_build_plan.md)
+
+사용법
+------
+  bash ../_kit/scripts/check_resources.sh       # 0) 자원 확인
+  python build_gemma_TEMPLATE.py --dry-run      # 1) 버킷 해석(통과함) — 하지만 아래 참고
+  python build_gemma_TEMPLATE.py -o ./out       # 2) 아키텍처 검사에서 fail-fast(벽 확인)
 """
 
 import argparse
@@ -47,18 +49,28 @@ from furiosa_llm.artifact import (
     ParallelConfig,
 )
 
-# TODO(1): 실제로 쓸 Gemma 모델 ID 로 바꾸세요 (gated 이므로 로그인 필요).
-MODEL_ID = "google/gemma-3-1b-it"  # ← 예시. 접근 가능한/원하는 변형으로 교체하세요.
+# Gemma 4 12B: Apache-2.0, ungated(토큰 불필요), 멀티모달·encoder-free, model_type=gemma4_unified.
+# 아키텍처 클래스명(= furiosa.models 에서 찾는 이름). config.json 의 architectures[0].
+MODEL_ID = "google/gemma-4-12B"
+HF_ARCH_CLASS = "Gemma4UnifiedForConditionalGeneration"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TODO(2): 프리셋이 없으므로 4종 버킷을 "전부" 직접 채우세요. 아래는 빈 뼈대입니다.
-#          비워둔 채로 dry-run 하면 의도적으로 실패합니다(그게 벽 2의 확인 방법).
-#          형식은 실습 ①의 QWEN25_05B_* 와 presets.py 의 LLAMA_3_1_8B_PRESET 참고.
+# 버킷 4종 — "설계 예시"로 채워 둠 (Gemma 4 12B 텍스트 백본: 48층/hidden3840/16heads/
+# KV8/head_dim256/vocab262144/sliding_window1024 기준, max_model_len=4096 가정).
+# 형식(2026.3.0 확인): prefill/decode = (batch, attention_size) 2-튜플;
+#                      append = (batch, attention_size, input_ids_size) 3-튜플, attn > input;
+#                      tokenwise = int 시퀀스. 이 값들은 '구조적으로 유효'해서 dry-run 은
+# 통과하지만, 아키텍처 미구현 때문에 실제 빌드는 성공하지 못한다(위 설명 참고).
 # ─────────────────────────────────────────────────────────────────────────────
-GEMMA_PREFILL = ()   # 예: ((1, 1024), (1, 2048), (1, 3072), (1, 4096))
-GEMMA_DECODE = ()    # 예: ((128, 1024), (128, 2048), (128, 3072), (128, 4096))
-GEMMA_APPEND = ()    # 예: ((1, 1024, 128), (1, 2048, 512), ...)  # attn > input
-GEMMA_TOKENWISE = () # 예: (128, 1024, 2048, 3072, 4096)
+GEMMA_PREFILL = tuple((1, x) for x in range(128, 4096 + 1, 128))
+GEMMA_DECODE = ((1, 1024), (1, 2048), (1, 4096))
+GEMMA_APPEND = (
+    (1, 512, 128), (1, 512, 256),
+    (1, 1024, 128), (1, 1024, 512),
+    (1, 2048, 512), (1, 2048, 1024),
+    (1, 4096, 512), (1, 4096, 1024),
+)
+GEMMA_TOKENWISE = (1, 2, 4, 8, 16, 32, 64, 128, 256, 384, 512, 1024)
 
 
 def effective_cpus() -> int:
@@ -79,29 +91,76 @@ def effective_cpus() -> int:
     return os.cpu_count() or 1
 
 
+def resolve_arch_class(model_id: str, fallback: str) -> str:
+    """HF config.json 에서 실제 아키텍처 클래스명을 알아낸다(가능하면). 실패 시 fallback."""
+    try:
+        from transformers import AutoConfig
+        cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+        archs = getattr(cfg, "architectures", None)
+        if archs:
+            return archs[0]
+    except Exception as e:  # 네트워크/미설치/gated 등 — fallback 사용
+        print(f"[참고] HF config 로드 실패({type(e).__name__}) → 알려진 클래스명으로 검사")
+    return fallback
+
+
+def assert_furiosa_supports(arch_class: str) -> None:
+    """빌드 전에 Furiosa 가 이 아키텍처를 '구현'했는지 검사하고, 없으면 fail-fast.
+
+    Furiosa 내부(optimum/modeling.py get_models_lang_class)는
+    `getattr(furiosa.models, <HF아키텍처클래스명>)` 로 구현체를 찾는다.
+    이 검사는 그 로직을 그대로 흉내내, 긴 컴파일을 시작하기 전에 벽을 알려준다.
+    """
+    try:
+        import furiosa.models as fm
+    except Exception as e:
+        print(f"[경고] furiosa.models import 실패({e}) — 지원 검사 생략, 그대로 진행")
+        return
+    available = sorted(n for n in dir(fm) if n.endswith(("ForCausalLM", "ForConditionalGeneration")))
+    if not hasattr(fm, arch_class):
+        bar = "=" * 74
+        raise SystemExit(
+            f"\n{bar}\n"
+            f"[벽] Furiosa 가 이 아키텍처를 구현하지 않았습니다: {arch_class}\n"
+            f"     furiosa.models 에 있는 클래스: {available}\n"
+            f"     → 이건 '프리셋(버킷) 부재'가 아니라 '아키텍처 구현 부재'입니다.\n"
+            f"       BucketConfig 를 아무리 완벽히 채워도 해결되지 않습니다.\n"
+            f"     실제 .build() 는 다음으로 실패합니다:\n"
+            f"       ValueError: unsupported model: the class '{arch_class}'\n"
+            f"                   not available in furiosa.models\n"
+            f"     지금 빌드하면 시간만 낭비되므로 여기서 멈춥니다(fail-fast).\n"
+            f"\n"
+            f"     '버킷 직접 설계'를 실제로 실습하려면 → 구현은 있고 프리셋만 없는\n"
+            f"     모델로 바꾸세요: Mistral / Phi3 / GptOss / Qwen3-VL (실제로 빌드됨).\n"
+            f"     Furiosa 가 Gemma 를 지원하려면: furiosa.models 에 Gemma 구현(텍스트\n"
+            f"     디코더 + 멀티모달용 비전/오디오 투영)과 presets.py 프리셋이 추가돼야 함.\n"
+            f"{bar}"
+        )
+    print(f"[확인] furiosa.models 에 {arch_class} 있음 → 아키텍처 지원 OK, 계속 진행")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--output", type=Path, default=Path("./gemma-artifact"))
     ap.add_argument("--max-model-len", type=int, default=4096)
-    ap.add_argument("--tensor-parallel-size", type=int, default=4)
-    ap.add_argument("--dry-run", action="store_true", help="버킷 검증만, 컴파일 안 함")
+    ap.add_argument(
+        "--tensor-parallel-size", type=int, default=4,
+        help="2026.3.0 에서는 4 또는 8 만 허용(1/2 불가). 12B 는 8 권장.",
+    )
+    ap.add_argument("--dry-run", action="store_true", help="버킷 검증만 (아키텍처 검사도 생략됨)")
     ap.add_argument("--workers", type=int, default=1, help="/dev/shm 이 작으면 1 권장")
     ap.add_argument("--cpu-per-worker", type=int, default=0, help="0이면 cgroup 실효CPU에서 자동 계산")
+    ap.add_argument(
+        "--skip-arch-check", action="store_true",
+        help="아키텍처 지원 검사를 건너뛰고 곧장 빌드(진짜 ValueError 를 보고 싶을 때).",
+    )
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    # 뼈대를 안 채웠으면 친절히 멈춘다(그래도 벽 2의 원리는 dry-run 로그로 직접 보세요).
+    # 버킷 4종이 채워졌는지 (이 파일은 예시로 채워둠 → 통과)
     if not (GEMMA_PREFILL and GEMMA_DECODE and GEMMA_APPEND and GEMMA_TOKENWISE):
-        raise SystemExit(
-            "TODO(2) 미완성: GEMMA_PREFILL/DECODE/APPEND/TOKENWISE 4종을 모두 채우세요. "
-            "부분 지정은 금지입니다. (참고: _kit/01_GUIDE.md, presets.py)"
-        )
-
-    if not (os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-            or (Path.home() / ".cache/huggingface/token").is_file()):
-        print("[주의] HF 토큰이 안 보입니다. Gemma 는 gated 라 403 이 날 수 있어요.")
-        print("       huggingface-cli login 먼저 하세요.\n")
+        raise SystemExit("GEMMA_PREFILL/DECODE/APPEND/TOKENWISE 4종을 모두 채우세요.")
 
     eff = effective_cpus()
     cpu_per_worker = args.cpu_per_worker or max(1, eff - 1)
@@ -115,26 +174,31 @@ def main() -> None:
         append_buckets=GEMMA_APPEND,
         tokenwise_seq_lens=GEMMA_TOKENWISE,
     )
+
+    b_pre, b_dec, b_app = len(GEMMA_PREFILL), len(GEMMA_DECODE), len(GEMMA_APPEND)
+    print("\n=== Resolved buckets (설계 예시) ===")
+    print(f"  model          : {MODEL_ID}  (arch: {HF_ARCH_CLASS})")
+    print(f"  prefill/decode : {b_pre} / {b_dec}")
+    print(f"  append_buckets : {b_app}   (attention_size > input_ids_size 규칙 준수)")
+
+    if args.dry_run:
+        print("\n[dry-run] 버킷은 구조적으로 유효합니다. **하지만 이 통과는 거짓 양성입니다.**")
+        print("  아키텍처 검사/컴파일은 안 했습니다. 실제 빌드는 아키텍처 미구현으로 실패합니다.")
+        print("  벽을 확인하려면 --dry-run 없이 실행하세요.")
+        return
+
+    # ★ 빌드 전에 아키텍처 지원을 검사 → Gemma 는 여기서 fail-fast (벽 확인)
+    if not args.skip_arch_check:
+        arch = resolve_arch_class(MODEL_ID, HF_ARCH_CLASS)
+        assert_furiosa_supports(arch)  # Gemma 면 SystemExit 로 멈춤(명확한 설명 출력)
+
+    # 아래는 '지원되는 모델로 바꿨을 때'만 도달한다. Gemma 로는 도달 불가.
     builder = ArtifactBuilder(
         MODEL_ID,
         model_config=ModelConfig(max_model_len=args.max_model_len),
         parallel_config=ParallelConfig(tensor_parallel_size=args.tensor_parallel_size),
         bucket_config=bucket_config,
     )
-
-    b = builder._buckets
-    print("\n=== Resolved buckets ===")
-    print(f"  model          : {MODEL_ID}")
-    print(f"  max_model_len  : {builder._max_model_len}")
-    print(f"  prefill/decode : {len(b.prefill_buckets)} / {len(b.decode_buckets)}")
-    print(f"  append_buckets : {len(b.append_buckets)}   (0이면 prefix caching 이 꺼진다!)")
-    total = len(b.prefill_buckets) + len(b.decode_buckets) + len(b.append_buckets)
-    print(f"  → 총 파이프라인 약 {total}개")
-
-    if args.dry_run:
-        print("\n[dry-run] 'no matching preset' 없이 여기까지 왔으면 버킷 설계 성공. 컴파일 안 함.")
-        return
-
     print(f"\n빌드 시작 → {args.output}")
     builder.build(
         args.output,

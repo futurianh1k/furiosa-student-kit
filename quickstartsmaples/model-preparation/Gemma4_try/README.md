@@ -1,55 +1,78 @@
-# 실습 ④ (심화·도전): Gemma — 지원 프리셋이 없는 모델
+# 실습 ④ (심화·도전): Gemma 4 12B — "지원되지 않는 아키텍처"의 벽
 
-> **이 실습의 교훈: 프리셋이 없으면 버킷을 "직접" 설계해야 한다.**
-> 디렉터리 이름이 `Gemma4_try`("try")인 이유입니다. 앞의 세 실습과 달리 정답이
-> 주어져 있지 않습니다. 두 개의 벽을 스스로 넘어야 합니다.
+> **이 실습의 진짜 교훈: 버킷을 못 채워서가 아니라, Furiosa가 이 아키텍처를
+> 아예 구현하지 않아서 막힌다.** 디렉터리 이름이 `Gemma4_try`("try")인 이유입니다.
+> "안 될 수도 있다"가 정상 — **어디서 왜 막히는지 정확히 진단·기록하는 것**이 목표.
 
-## 두 개의 벽
+> ⚠️ **검증 결론 (2026-07-15, 딥리서치 + Codex + 로컬 직접 실행 3중 확인).**
+> 아래는 초판 README의 잘못된 전제를 교정한 내용입니다. 전체 근거:
+> [../../../docs/handoff/claudex-handoff.md](../../../docs/handoff/claudex-handoff.md) ·
+> [../../../docs/modeldev/2026-07-15_codex_gemma4_build_plan.md](../../../docs/modeldev/2026-07-15_codex_gemma4_build_plan.md)
 
-### 벽 1: gated 다운로드
-Gemma도 gated입니다(실습 ③ Llama와 동일). 먼저 HF 토큰으로 로그인해야 합니다.
+## 결론: 현재 Furiosa RNGD에서 Gemma 4 12B는 빌드 불가 (NOT FEASIBLE)
+
+`furiosa.models`가 구현한 아키텍처는 이 pod 기준 다음뿐입니다:
+`Exaone4 / Exaone / ExaoneMoe / GptOss / Llama / Mistral / Phi3 / Qwen2 / Qwen3 / Qwen3Moe / Qwen3VL`.
+**Gemma는 없습니다.** Furiosa는 `getattr(furiosa.models, <HF아키텍처클래스명>)`로 구현체를
+찾는데, Gemma 4 12B의 클래스 `Gemma4UnifiedForConditionalGeneration`이 없어서 실제 빌드가
+이렇게 죽습니다:
+
+```
+ValueError: unsupported model: the class
+            'Gemma4UnifiedForConditionalGeneration' not available in furiosa.models
+```
+
+## 초판의 전제 오류 2가지 (교정)
+
+### ❌→✅ 벽 1: "gated" — Gemma 4는 gated가 아니다
+Gemma **4**는 **Apache-2.0 · ungated**입니다. HF 토큰이 필요 없습니다.
+(gated인 것은 Gemma **3**까지 — 초판 템플릿이 기본값을 `gemma-3-1b-it`으로 둬서 세대가
+뒤섞였음.)
+
+### ❌→✅ 벽 2: "프리셋만 없다"가 아니라 "아키텍처 구현이 없다"
+초판은 "presets.py에 gemma가 없으니 버킷 4종을 채우면 된다"고 했지만 **틀렸습니다.**
+`model_type`도 `gemma`가 아니라 `gemma4_unified`이고, 근본 문제는 **버킷이 아니라 구현**입니다.
+
+| 갭 | 고칠 수 있나 | 해당 모델 |
+|---|---|---|
+| (a) 프리셋만 없음 | ✅ BucketConfig 직접 설계로 해결 | Mistral · Phi3 · GptOss · Qwen3-VL (구현은 있음) |
+| (b) **아키텍처 구현 자체가 없음** | ❌ **버킷으로 절대 불가** | **Gemma (여기 해당)** |
+
+## ⚠️ 함정: `--dry-run`은 통과한다 (거짓 양성)
+
+`get_optimized_cls`는 `.build()` 시점(`builder.py:219`)에만 실행됩니다. 그래서
+`--dry-run`(버킷만 해석)은 **성공**하고, 실제 빌드에서만 위 `ValueError`가 터집니다.
+→ 초판의 "dry-run 통과 = 성공" 기준은 Gemma에선 **거짓 양성**입니다.
+
+이 폴더의 `build_gemma_TEMPLATE.py`는 이 함정을 반영해, 버킷을 예시로 채워두되 **빌드 전에
+아키텍처 지원을 스스로 검사(fail-fast)** 하도록 다시 작성됐습니다.
+
+## 실습 절차 (벽을 직접 확인)
 ```bash
-huggingface-cli login
+bash ../_kit/scripts/check_resources.sh          # 0) 자원 확인
+python build_gemma_TEMPLATE.py --dry-run         # 1) 버킷은 통과 — 단, 이건 거짓 양성
+python build_gemma_TEMPLATE.py -o ./gemma-artifact  # 2) 아키텍처 검사에서 fail-fast → 벽 확인
+# (진짜 ValueError 를 직접 보고 싶으면:  --skip-arch-check 로 곧장 빌드 시도)
 ```
 
-### 벽 2: **프리셋이 없다**
-Furiosa의 `presets.py`에는 `qwen2 / exaone4 / llama / qwen3 / qwen3_moe`만 있고
-**gemma는 없습니다.** 그래서 버킷을 비운 채 빌드하면 이렇게 실패합니다:
-```
-No bucket configuration provided and no matching bucket preset found
-for model_type=gemma... Please provide explicit bucket configuration.
-```
-즉 `--fix-append` 정도가 아니라, **4종 버킷을 전부 직접 정의**해야 합니다.
+## Gemma 4 12B 아키텍처 (참고, config.json 실측)
+48층 · hidden 3840 · heads 16 · **KV heads 8(GQA)** · head_dim 256 · vocab 262144 ·
+max_pos 262144(256K) · sliding_window 1024 · gelu_pytorch_tanh · bf16 · ~11.95B.
+**멀티모달·encoder-free**(raw 이미지패치+오디오웨이브폼 직접 투영) · thinking mode.
+하드웨어는 문제 아님(BF16 24GB / FP8 12GB → 48GB 카드 1장에 여유). 즉 **막는 건 오직
+소프트웨어 아키텍처 지원**.
 
-## 무엇을 해야 하나 (직접 설계)
-
-원본 `build_artifact.py`는 프리셋/`--fix-append`만 지원하므로, 이 실습은 **버킷을
-직접 설계**해야 합니다. 이 폴더에 뼈대 파일 `build_gemma_TEMPLATE.py`를 넣어 두었습니다
-(원본 `_kit/scripts/build_artifact.py`는 건드리지 않았습니다). 파일 안 `GEMMA_*` 상수
-4종이 **비어 있으니 여러분이 채우세요**(안 채우면 의도적으로 멈춥니다). 참고 자료:
-
-- 버킷 4종의 의미와 형식: [../_kit/01_GUIDE.md](../_kit/01_GUIDE.md), `presets.py`의 다른 모델 예시
-- 4종을 **전부** 채워야 함(부분 지정 금지): `prefill_buckets`, `decode_buckets`,
-  `append_buckets`, `tokenwise_seq_lens`
-- 값 잡는 감각: 실습 ①의 `_kit/scripts/build_artifact.py` 안 `QWEN25_05B_*` 상수와,
-  `presets.py`의 `LLAMA_3_1_8B_PRESET`을 참고해 Gemma 크기에 맞게 조정
-
-## 최소 절차
-1. `bash ../_kit/scripts/check_resources.sh` — 자원 확인
-2. `huggingface-cli login` — gated 라 토큰 로그인
-3. `build_gemma_TEMPLATE.py`를 열어 `MODEL_ID` 확인/교체 + `GEMMA_PREFILL/DECODE/
-   APPEND/TOKENWISE` 4종을 직접 채움
-4. **먼저 `python build_gemma_TEMPLATE.py --dry-run`** 으로 "no matching preset" 없이
-   버킷이 해석되는지 확인
-5. `python build_gemma_TEMPLATE.py -o ./gemma-artifact` → `verify_artifact.py`로 검증
-
-## 성공/실패의 기준
-- dry-run에서 `append_buckets`가 0보다 크고 에러가 없으면 설계 성공
-- 빌드가 `0/N`에서 멈추면 → 버킷 값이 아니라 **자원 설정** 문제 (워커 CPU ≤ 실효 CPU)
-- 이 실습은 "안 될 수도 있다"가 정상입니다. 어디서 왜 막히는지 기록하는 것 자체가 목표.
+## 실제로 "버킷 설계"를 실습하고 싶다면 → 대체 모델
+구현은 있고 **프리셋만 없는** 모델로 바꾸면, 버킷을 직접 설계해야 하고 **실제로 빌드됩니다**:
+`Mistral` · `Phi3` · `GptOss` · `Qwen3-VL`.
+(Codex도 같은 이유로 `Qwen/Qwen3-VL-8B-Instruct`로 선회함 →
+[../../../docs/modeldev/2026-07-15_codex_gemma4_build_plan.md](../../../docs/modeldev/2026-07-15_codex_gemma4_build_plan.md))
 
 ## 생각해볼 점
-- 프리셋이 없는 모델을 지원하려면 무엇을 알아야 하나? (모델 구조 → 버킷 설계)
-- gated + 무프리셋이 겹칠 때, 어떤 순서로 문제를 좁혀야 하나?
+- "지원 안 됨"에도 두 층위가 있다: **프리셋 부재(버킷으로 해결)** vs **구현 부재(불가)**.
+  주어진 모델이 어느 쪽인지 어떻게 판별하나? (→ `furiosa.models`에 클래스가 있는지 확인)
+- `--dry-run` 통과가 왜 "성공"을 보장하지 못하나? (검사·컴파일이 `.build()`에서만 일어남)
+- Furiosa가 Gemma를 지원하려면 무엇이 필요한가? (`furiosa.models`에 Gemma 구현 +
+  멀티모달용 비전/오디오 투영 + `presets.py` 프리셋)
 
 전체 배경: [../_kit/01_GUIDE.md](../_kit/01_GUIDE.md) · [../_kit/02_POSTMORTEM.md](../_kit/02_POSTMORTEM.md)

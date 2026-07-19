@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "local": {
+      "options": {
+        "baseURL": "http://localhost:8000/v1"
+      },
+      "models": {
+        "furiosa-ai/Qwen3-8B-FP8": {
+          "name": "Qwen3-8B FP8 (Furiosa NPU)",
+          "family": "qwen3",
+          "tool_call": false,
+          "limit": {
+            "context": 40960,
+            "output": 4096
+          }
+        }
+      }
+    }
+  },
+  "model": "local/furiosa-ai/Qwen3-8B-FP8",
+  "enabled_providers": ["local"]
+}
